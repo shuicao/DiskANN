@@ -916,9 +916,13 @@ namespace diskann {
 
     auto s = std::chrono::high_resolution_clock::now();
 
+    //[cmt]
+    //data_file_to_use: data/sift/sift_learn.fbin
+    //points_num - 10万个训练用向量,  dim - 128维度
     size_t points_num, dim;
 
     diskann::get_bin_metadata(data_file_to_use.c_str(), points_num, dim);
+    //[cmt] p_val: 2.56
     const double p_val =
         ((double) MAX_PQ_TRAINING_SET_SIZE / (double) points_num);
 
@@ -927,6 +931,10 @@ namespace diskann {
                                       disk_pq_compressed_vectors_path,
                                       compareMetric, p_val, disk_pq_dims);
     }
+    //[cmt] num_pq_chunks: 10737.  命令行配置为1GB的情况下
+    //根据 B 和 n 确定pq 的码本子空间数 m
+    //B即查询时的内存阈值，单位 GB，控制 pq 码本大小。这里是1.0737*10^9
+    //n即训练向量的个数. 这里是10万
     size_t num_pq_chunks =
         (size_t) (std::floor)(_u64(final_index_ram_limit / points_num));
 
@@ -935,9 +943,15 @@ namespace diskann {
     num_pq_chunks =
         num_pq_chunks > MAX_PQ_CHUNKS ? MAX_PQ_CHUNKS : num_pq_chunks;
 
+    //[cmt] num_pq_chunks最终为128, 与dim的值相同
     diskann::cout << "Compressing " << dim << "-dimensional data into "
                   << num_pq_chunks << " bytes per vector." << std::endl;
 
+    //[cmt]
+    //pq_pivots_path:
+    // data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin
+    //pq_compressed_vectors_path:
+    // data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_compressed.bin
     generate_quantized_data<T>(data_file_to_use, pq_pivots_path,
                                pq_compressed_vectors_path, compareMetric, p_val,
                                num_pq_chunks, use_opq);

@@ -298,6 +298,11 @@ namespace diskann {
                          unsigned dim, unsigned num_centers,
                          unsigned num_pq_chunks, unsigned max_k_means_reps,
                          std::string pq_pivots_path, bool make_zero_mean) {
+    //[cmt] num_train100000, dim:128,
+    // num_centers:256, num_pq_chunks:128,
+    // max_k_means_reps:12,
+    // pq_pivots_path:data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin,
+    // make_zero_mean:1
     if (num_pq_chunks > dim) {
       diskann::cout << " Error: number of chunks more than dimension"
                     << std::endl;
@@ -332,6 +337,7 @@ namespace diskann {
                            // then compute PQ. This needs to be set to false
                            // when using PQ for MIPS as such translations dont
                            // preserve inner products.
+      //[cmt]用 p = 1500000/n 的采样率全局均匀采样出 pq 训练集训练 pq 中心点。
       for (uint64_t d = 0; d < dim; d++) {
         for (uint64_t p = 0; p < num_train; p++) {
           centroid[d] += train_data[p * dim + d];
@@ -955,10 +961,14 @@ namespace diskann {
                                diskann::Metric   compareMetric,
                                const double p_val, const size_t num_pq_chunks,
                                const bool use_opq) {
+    //[cmt]p_val: 2.56,   num_pq_chunks: 128
+    //train_size: 100000,  train_dim:128
+    //data_file_to_use:  data/sift/sift_learn.fbin
     size_t train_size, train_dim;
     float* train_data;
 
     // instantiates train_data with random sample updates train_size
+    //[cmt] 读取训练数据至train_data中
     gen_random_slice<T>(data_file_to_use.c_str(), p_val, train_data, train_size,
                         train_dim);
     diskann::cout << "Training data with " << train_size << " samples loaded."
