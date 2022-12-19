@@ -98,6 +98,7 @@ void gen_random_slice(const std::string base_file,
 template<typename T>
 void gen_random_slice(const std::string data_file, double p_val,
                       float *&sampled_data, size_t &slice_size, size_t &ndims) {
+  //[cmt] "data/sift/sift_learn.fbin",  2.56
   size_t                          npts;
   uint32_t                        npts32, ndims32;
   std::vector<std::vector<float>> sampled_vectors;
@@ -108,6 +109,7 @@ void gen_random_slice(const std::string data_file, double p_val,
   cached_ifstream base_reader(data_file.c_str(), read_blk_size);
 
   // metadata: npts, ndims
+  //[cmt] npts32: 100000,  ndims32: 128
   base_reader.read((char *) &npts32, sizeof(unsigned));
   base_reader.read((char *) &ndims32, sizeof(unsigned));
   npts = npts32;
@@ -117,10 +119,11 @@ void gen_random_slice(const std::string data_file, double p_val,
   p_val = p_val < 1 ? p_val : 1;
 
   std::random_device rd;  // Will be used to obtain a seed for the random number
-  size_t             x = rd();
+  size_t             x = rd();   //[cmt] 2184505536
   std::mt19937       generator((unsigned) x);
   std::uniform_real_distribution<float> distribution(0, 1);
 
+  //[cmt] 遍历10万个向量
   for (size_t i = 0; i < npts; i++) {
     base_reader.read((char *) cur_vector_T.get(), ndims * sizeof(T));
     float rnd_val = distribution(generator);
@@ -131,6 +134,8 @@ void gen_random_slice(const std::string data_file, double p_val,
       sampled_vectors.push_back(cur_vector_float);
     }
   }
+
+  //[cmt] slice_size: 100000
   slice_size = sampled_vectors.size();
   sampled_data = new float[slice_size * ndims];
   for (size_t i = 0; i < slice_size; i++) {

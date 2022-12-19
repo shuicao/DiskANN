@@ -310,6 +310,8 @@ namespace kmeans {
                    const size_t num_centers, const size_t max_reps,
                    std::vector<size_t>* closest_docs,
                    uint32_t*            closest_center) {
+    //[cmt] num_points - 100000, dim -1~N , num_centers - 256,
+    //max_reps - 12,
     float residual = std::numeric_limits<float>::max();
     bool  ret_closest_docs = true;
     bool  ret_closest_center = true;
@@ -374,6 +376,7 @@ namespace kmeans {
 
   void kmeanspp_selecting_pivots(float* data, size_t num_points, size_t dim,
                                  float* pivot_data, size_t num_centers) {
+    //[cmt] num_points - 100000, dim - 128, num_centers - 256
     if (num_points > 1 << 23) {
       diskann::cout << "ERROR: n_pts " << num_points
                     << " currently not supported for k-means++, maximum is "

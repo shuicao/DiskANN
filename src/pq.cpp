@@ -298,11 +298,11 @@ namespace diskann {
                          unsigned dim, unsigned num_centers,
                          unsigned num_pq_chunks, unsigned max_k_means_reps,
                          std::string pq_pivots_path, bool make_zero_mean) {
-    //[cmt] num_train100000, dim:128,
-    // num_centers:256, num_pq_chunks:128,
-    // max_k_means_reps:12,
+    //[cmt] num_train: 100000, dim: 128,
+    // num_centers:256(常量), num_pq_chunks:128,
+    // max_k_means_reps:12(常量),
     // pq_pivots_path:data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin,
-    // make_zero_mean:1
+    // make_zero_mean: true
     if (num_pq_chunks > dim) {
       diskann::cout << " Error: number of chunks more than dimension"
                     << std::endl;
@@ -337,12 +337,15 @@ namespace diskann {
                            // then compute PQ. This needs to be set to false
                            // when using PQ for MIPS as such translations dont
                            // preserve inner products.
+      //[cmt] 如果我们使用 L2 距离，可以选择转换所有向量，将它们进行聚类并计算PQ。
+      //这个需要设置为false，当使用 PQ for MIPS 时，因为这种转换不能保留内积。
+
       //[cmt]用 p = 1500000/n 的采样率全局均匀采样出 pq 训练集训练 pq 中心点。
       for (uint64_t d = 0; d < dim; d++) {
         for (uint64_t p = 0; p < num_train; p++) {
           centroid[d] += train_data[p * dim + d];
         }
-        centroid[d] /= num_train;
+        centroid[d] /= num_train;   //[cmt]随机取一个循环的值抽查: 3000708/100000 = 30
       }
 
       for (uint64_t d = 0; d < dim; d++) {
@@ -354,11 +357,11 @@ namespace diskann {
 
     std::vector<uint32_t> chunk_offsets;
 
-    size_t low_val = (size_t) std::floor((double) dim / (double) num_pq_chunks);
-    size_t high_val = (size_t) std::ceil((double) dim / (double) num_pq_chunks);
-    size_t max_num_high = dim - (low_val * num_pq_chunks);
-    size_t cur_num_high = 0;
-    size_t cur_bin_threshold = high_val;
+    size_t low_val = (size_t) std::floor((double) dim / (double) num_pq_chunks);  // 1 = 128/128
+    size_t high_val = (size_t) std::ceil((double) dim / (double) num_pq_chunks);  // 1
+    size_t max_num_high = dim - (low_val * num_pq_chunks);  // 0
+    size_t cur_num_high = 0;  // 0
+    size_t cur_bin_threshold = high_val;  // 1
 
     std::vector<std::vector<uint32_t>> bin_to_dims(num_pq_chunks);
     tsl::robin_map<uint32_t, uint32_t> dim_to_bin;
@@ -369,7 +372,7 @@ namespace diskann {
       if (dim_to_bin.find(d) != dim_to_bin.end())
         continue;
       auto  cur_best = num_pq_chunks + 1;
-      float cur_best_load = std::numeric_limits<float>::max();
+      float cur_best_load = std::numeric_limits<float>::max();  //3.4*10^38
       for (uint32_t b = 0; b < num_pq_chunks; b++) {
         if (bin_loads[b] < cur_best_load &&
             bin_to_dims[b].size() < cur_bin_threshold) {
@@ -385,8 +388,14 @@ namespace diskann {
       }
     }
 
+    //[cmt]
+    //至此, bin_to_dims有128个元素。 每个元素是一个vector<float>，其中包含1个元素，值为下标值。
+    //即 bin_to_dims[0][0] == 0, [1][0] == 1, [127][0] == 127
+
+    //bin_loads没有任何地方会改写它，值仍然是128个0。
+
     chunk_offsets.clear();
-    chunk_offsets.push_back(0);
+    chunk_offsets.push_back(0);  //首元素置为0
 
     for (uint32_t b = 0; b < num_pq_chunks; b++) {
       if (b > 0)
@@ -394,7 +403,9 @@ namespace diskann {
                                 (unsigned) bin_to_dims[b - 1].size());
     }
     chunk_offsets.push_back(dim);
+    //[cmt] 至此, chunk_offsets共128个元素。值为0,1,2...127
 
+    //[cmt] 256个中心点
     full_pivot_data.reset(new float[num_centers * dim]);
 
     for (size_t i = 0; i < num_pq_chunks; i++) {
@@ -420,10 +431,12 @@ namespace diskann {
                     cur_chunk_size * sizeof(float));
       }
 
+      //[cmt] 使用k-means算法，生成中心点
       kmeans::kmeanspp_selecting_pivots(cur_data.get(), num_train,
                                         cur_chunk_size, cur_pivot_data.get(),
                                         num_centers);
 
+      //[cmt] k-means算法的三种实现之一, Lloyd算法.
       kmeans::run_lloyds(cur_data.get(), num_train, cur_chunk_size,
                          cur_pivot_data.get(), num_centers, max_k_means_reps,
                          NULL, closest_center.get());
@@ -435,7 +448,7 @@ namespace diskann {
       }
     }
 
-    std::vector<size_t> cumul_bytes(4, 0);
+    std::vector<size_t> cumul_bytes(4, 0);  //初始值{0, 0, 0, 0}
     cumul_bytes[0] = METADATA_SIZE;
     cumul_bytes[1] =
         cumul_bytes[0] +
@@ -449,9 +462,15 @@ namespace diskann {
         cumul_bytes[2] + diskann::save_bin<uint32_t>(
                              pq_pivots_path.c_str(), chunk_offsets.data(),
                              chunk_offsets.size(), 1, cumul_bytes[2]);
+
+    //[cmt] pq_pivots_path: data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin
+    // cumul_bytes: {4096, 135176, 135696, 136220}
     diskann::save_bin<_u64>(pq_pivots_path.c_str(), cumul_bytes.data(),
                             cumul_bytes.size(), 1, 0);
 
+    //[cmt]
+    // Saved pq pivot data to
+    // data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin of size 136220B
     diskann::cout << "Saved pq pivot data to " << pq_pivots_path << " of size "
                   << cumul_bytes[cumul_bytes.size() - 1] << "B." << std::endl;
 
@@ -684,7 +703,7 @@ namespace diskann {
   // streams the base file (data_file), and computes the closest centers in each
   // chunk to generate the compressed data_file and stores it in
   // pq_compressed_vectors_path.
-  // If the numbber of centers is < 256, it stores as byte vector, else as
+  // If the number of centers is < 256, it stores as byte vector, else as
   // 4-byte vector in binary format.
   template<typename T>
   int generate_pq_data_from_pivots(const std::string data_file,
@@ -692,6 +711,12 @@ namespace diskann {
                                    std::string pq_pivots_path,
                                    std::string pq_compressed_vectors_path,
                                    bool        use_opq) {
+    //[cmt]
+    //data_file - "data/sift/sift_learn.fbin"
+    //num_centers - 256, num_pq_chunks - 128
+    //pq_pivots_path="data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin"
+    //pq_compressed_vectors_path="data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_compressed.bin"
+    //use_opq=false
     _u64            read_blk_size = 64 * 1024 * 1024;
     cached_ifstream base_reader(data_file, read_blk_size);
     _u32            npts32;
@@ -706,6 +731,8 @@ namespace diskann {
     std::unique_ptr<float[]>    centroid;
     std::unique_ptr<uint32_t[]> chunk_offsets;
 
+    //[cmt]
+    //"data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_compressed.bin_inflated.bin"
     std::string inflated_pq_file = pq_compressed_vectors_path + "_inflated.bin";
 
     if (!file_exists(pq_pivots_path)) {
@@ -715,6 +742,7 @@ namespace diskann {
       _u64                    nr, nc;
       std::unique_ptr<_u64[]> file_offset_data;
 
+      //[cmt] nr - 4, nc - 1
       diskann::load_bin<_u64>(pq_pivots_path.c_str(), file_offset_data, nr, nc,
                               0);
 
@@ -727,6 +755,7 @@ namespace diskann {
             __FILE__, __LINE__);
       }
 
+      //[cmt] nr - 256, nc - 128, file_offset_data[0] - 4096
       diskann::load_bin<float>(pq_pivots_path.c_str(), full_pivot_data, nr, nc,
                                file_offset_data[0]);
 
@@ -740,6 +769,7 @@ namespace diskann {
             __FILE__, __LINE__);
       }
 
+      //[cmt] nr - 128, nc - 1, file_offset_data[1] - 135176
       diskann::load_bin<float>(pq_pivots_path.c_str(), centroid, nr, nc,
                                file_offset_data[1]);
 
@@ -752,6 +782,7 @@ namespace diskann {
             __FILE__, __LINE__);
       }
 
+      //[cmt] nr - 129, nc - 1, file_offset_data[2] - 135696
       diskann::load_bin<uint32_t>(pq_pivots_path.c_str(), chunk_offsets, nr, nc,
                                   file_offset_data[2]);
 
@@ -780,12 +811,12 @@ namespace diskann {
 
     std::ofstream compressed_file_writer(pq_compressed_vectors_path,
                                          std::ios::binary);
-    _u32          num_pq_chunks_u32 = num_pq_chunks;
+    _u32          num_pq_chunks_u32 = num_pq_chunks;  //128
 
     compressed_file_writer.write((char*) &num_points, sizeof(uint32_t));
     compressed_file_writer.write((char*) &num_pq_chunks_u32, sizeof(uint32_t));
 
-    size_t block_size = num_points <= BLOCK_SIZE ? num_points : BLOCK_SIZE;
+    size_t block_size = num_points <= BLOCK_SIZE ? num_points : BLOCK_SIZE;  //100000
 
 #ifdef SAVE_INFLATED_PQ
     std::ofstream inflated_file_writer(inflated_pq_file, std::ios::binary);
@@ -808,9 +839,11 @@ namespace diskann {
     std::unique_ptr<float[]> block_data_tmp =
         std::make_unique<float[]>(block_size * dim);
 
+    //[cmt] num_points - 100000, block_size - 100000, num_blocks - 1
     size_t num_blocks = DIV_ROUND_UP(num_points, block_size);
 
     for (size_t block = 0; block < num_blocks; block++) {
+      //[cmt] start_id: 0, end_id: 100000
       size_t start_id = block * block_size;
       size_t end_id = (std::min)((block + 1) * block_size, num_points);
       size_t cur_blk_size = end_id - start_id;
@@ -961,9 +994,13 @@ namespace diskann {
                                diskann::Metric   compareMetric,
                                const double p_val, const size_t num_pq_chunks,
                                const bool use_opq) {
-    //[cmt]p_val: 2.56,   num_pq_chunks: 128
-    //train_size: 100000,  train_dim:128
+    //[cmt]
     //data_file_to_use:  data/sift/sift_learn.fbin
+    //pq_pivots_path:  "data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin"
+    //pq_compressed_vectors_path:
+    //p_val: 2.56,   num_pq_chunks: 128
+
+    //train_size: 100000,  train_dim:128
     size_t train_size, train_dim;
     float* train_data;
 

@@ -611,12 +611,16 @@ namespace diskann {
     std::ofstream writer;
     open_file_to_write(writer, filename);
 
+    //[cmt] Writing bin: data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin
     diskann::cout << "Writing bin: " << filename.c_str() << std::endl;
     writer.seekp(offset, writer.beg);
     int    npts_i32 = (int) npts, ndims_i32 = (int) ndims;
     size_t bytes_written = npts * ndims * sizeof(T) + 2 * sizeof(uint32_t);
     writer.write((char*) &npts_i32, sizeof(int));
     writer.write((char*) &ndims_i32, sizeof(int));
+    //[cmt] bin: #pts = 128, #dims = 1, size = 520B
+    //[cmt] bin: #pts = 129, #dims = 1, size = 524B
+    //[cmt] bin: #pts = 4,   #dims = 1, size = 40B
     diskann::cout << "bin: #pts = " << npts << ", #dims = " << ndims
                   << ", size = " << bytes_written << "B" << std::endl;
 

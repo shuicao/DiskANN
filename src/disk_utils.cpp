@@ -799,6 +799,11 @@ namespace diskann {
   int build_disk_index(const char *dataFilePath, const char *indexFilePath,
                        const char     *indexBuildParameters,
                        diskann::Metric compareMetric, bool use_opq) {
+    //[cmt]
+    //dataFilePath= "data/sift/sift_learn.fbin"
+    //indexFilePath= "data/sift/disk_index_sift_learn_R32_L50_A1.2"
+    //indexBuildParameters= "32 50 1.000000 1.000000 4 0 0"
+    //compareMetric=diskann::L2, use_opq=false
     std::stringstream parser;
     parser << std::string(indexBuildParameters);
     std::string              cur_param;
@@ -806,6 +811,8 @@ namespace diskann {
     while (parser >> cur_param) {
       param_list.push_back(cur_param);
     }
+    //[cmt] param_list length=7,
+    // capacity={"32", "50", "1.000000", "1.000000", "4", "0", "0"}
     if (param_list.size() != 5 && param_list.size() != 6 &&
         param_list.size() != 7) {
       diskann::cout
@@ -837,6 +844,7 @@ namespace diskann {
     // if there is a 6th parameter, it means we compress the disk index
     // vectors also using PQ data (for very large dimensionality data). If the
     // provided parameter is 0, it means we store full vectors.
+    //[cmt] 这里说的第6个参数, 就是下标为[5]的参数. PQ_disk_bytes: 是否启用PQ
     if (param_list.size() == 6 || param_list.size() == 7) {
       disk_pq_dims = atoi(param_list[5].c_str());
       use_disk_pq = true;
@@ -852,22 +860,22 @@ namespace diskann {
     }
 
     std::string base_file(dataFilePath);
-    std::string data_file_to_use = base_file;
-    std::string index_prefix_path(indexFilePath);
-    std::string pq_pivots_path = index_prefix_path + "_pq_pivots.bin";
+    std::string data_file_to_use = base_file;  //"data/sift/sift_learn.fbin"
+    std::string index_prefix_path(indexFilePath); //"data/sift/disk_index_sift_learn_R32_L50_A1.2"
+    std::string pq_pivots_path = index_prefix_path + "_pq_pivots.bin"; //"data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin"
     std::string pq_compressed_vectors_path =
-        index_prefix_path + "_pq_compressed.bin";
-    std::string mem_index_path = index_prefix_path + "_mem.index";
-    std::string disk_index_path = index_prefix_path + "_disk.index";
-    std::string medoids_path = disk_index_path + "_medoids.bin";
-    std::string centroids_path = disk_index_path + "_centroids.bin";
-    std::string sample_base_prefix = index_prefix_path + "_sample";
+        index_prefix_path + "_pq_compressed.bin";  //"data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_compressed.bin"
+    std::string mem_index_path = index_prefix_path + "_mem.index"; //"data/sift/disk_index_sift_learn_R32_L50_A1.2_mem.index"
+    std::string disk_index_path = index_prefix_path + "_disk.index"; //"data/sift/disk_index_sift_learn_R32_L50_A1.2_disk.index"
+    std::string medoids_path = disk_index_path + "_medoids.bin"; //"data/sift/disk_index_sift_learn_R32_L50_A1.2_disk.index_medoids.bin"
+    std::string centroids_path = disk_index_path + "_centroids.bin"; //"data/sift/disk_index_sift_learn_R32_L50_A1.2_disk.index_centroids.bin"
+    std::string sample_base_prefix = index_prefix_path + "_sample"; //"data/sift/disk_index_sift_learn_R32_L50_A1.2_sample"
     // optional, used if disk index file must store pq data
     std::string disk_pq_pivots_path =
-        index_prefix_path + "_disk.index_pq_pivots.bin";
+        index_prefix_path + "_disk.index_pq_pivots.bin";  //"data/sift/disk_index_sift_learn_R32_L50_A1.2_disk.index_pq_pivots.bin"
     // optional, used if disk index must store pq data
     std::string disk_pq_compressed_vectors_path =
-        index_prefix_path + "_disk.index_pq_compressed.bin";
+        index_prefix_path + "_disk.index_pq_compressed.bin";  //"data/sift/disk_index_sift_learn_R32_L50_A1.2_disk.index_pq_compressed.bin"
 
     // output a new base file which contains extra dimension with sqrt(1 -
     // ||x||^2/M^2) for every x, M is max norm of all points. Extra space on
@@ -889,6 +897,7 @@ namespace diskann {
     unsigned R = (unsigned) atoi(param_list[0].c_str());
     unsigned L = (unsigned) atoi(param_list[1].c_str());
 
+    //[cmt] 1073741824 == 1024^3, 即1GB
     double final_index_ram_limit = get_memory_budget(param_list[2]);
     if (final_index_ram_limit <= 0) {
       std::cerr << "Insufficient memory budget (or string was not in right "
@@ -896,6 +905,7 @@ namespace diskann {
                 << std::endl;
       return -1;
     }
+    //[cmt] indexing_ram_budget: 1
     double indexing_ram_budget = (float) atof(param_list[3].c_str());
     if (indexing_ram_budget <= 0) {
       std::cerr << "Not building index. Please provide more RAM budget"
@@ -920,8 +930,8 @@ namespace diskann {
     //data_file_to_use: data/sift/sift_learn.fbin
     //points_num - 10万个训练用向量,  dim - 128维度
     size_t points_num, dim;
-
     diskann::get_bin_metadata(data_file_to_use.c_str(), points_num, dim);
+
     //[cmt] p_val: 2.56
     const double p_val =
         ((double) MAX_PQ_TRAINING_SET_SIZE / (double) points_num);
@@ -931,10 +941,11 @@ namespace diskann {
                                       disk_pq_compressed_vectors_path,
                                       compareMetric, p_val, disk_pq_dims);
     }
-    //[cmt] num_pq_chunks: 10737.  命令行配置为1GB的情况下
+    //[cmt] num_pq_chunks: 10737.  命令行配置为1GB的情况下:
     //根据 B 和 n 确定pq 的码本子空间数 m
-    //B即查询时的内存阈值，单位 GB，控制 pq 码本大小。这里是1.0737*10^9
+    //B即查询时的内存阈值，单位GB，控制 pq 码本大小。这里是1.0737*10^9,即1GB
     //n即训练向量的个数. 这里是10万
+    //得到:  num_pq_chunks == 10737
     size_t num_pq_chunks =
         (size_t) (std::floor)(_u64(final_index_ram_limit / points_num));
 
@@ -948,10 +959,10 @@ namespace diskann {
                   << num_pq_chunks << " bytes per vector." << std::endl;
 
     //[cmt]
-    //pq_pivots_path:
-    // data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin
-    //pq_compressed_vectors_path:
-    // data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_compressed.bin
+    //data_file_to_use: "data/sift/sift_learn.fbin"
+    //pq_pivots_path: data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_pivots.bin
+    //pq_compressed_vectors_path: data/sift/disk_index_sift_learn_R32_L50_A1.2_pq_compressed.bin
+    //p_val: 2.56,   num_pq_chunks:  128,  use_opq: false
     generate_quantized_data<T>(data_file_to_use, pq_pivots_path,
                                pq_compressed_vectors_path, compareMetric, p_val,
                                num_pq_chunks, use_opq);
